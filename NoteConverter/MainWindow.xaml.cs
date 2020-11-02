@@ -32,7 +32,6 @@ namespace NoteConverter
         {
             InitializeComponent();
             SetPage(0); // to block buttons
-            //Convert("C:/Users/angry/Downloads/MC music/Vocaloid/Darling Dance/Darling Dance v3.nbs");
         }
         public void Convert(string path)
         {
@@ -43,10 +42,11 @@ namespace NoteConverter
             }
             catch (Exception e)
             {
-                // TODO error
+                PageTextBox.Foreground = Brushes.Red;
                 PageTextBox.Text = e.Message;
                 return;
             }
+            PageTextBox.Foreground = Brushes.Black;
             RecreateBooks();
         }
 
