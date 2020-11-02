@@ -1,0 +1,15 @@
+C:\Users\angry\source\repos\NoteConverter\NoteConverter\bin\Release\NoteConverter.exe.config
+C:\Users\angry\source\repos\NoteConverter\NoteConverter\bin\Release\NoteConverter.exe
+C:\Users\angry\source\repos\NoteConverter\NoteConverter\bin\Release\NoteConverter.pdb
+C:\Users\angry\source\repos\NoteConverter\NoteConverter\obj\Release\NoteConverter.csprojAssemblyReference.cache
+C:\Users\angry\source\repos\NoteConverter\NoteConverter\obj\Release\MainWindow.g.cs
+C:\Users\angry\source\repos\NoteConverter\NoteConverter\obj\Release\App.g.cs
+C:\Users\angry\source\repos\NoteConverter\NoteConverter\obj\Release\NoteConverter_MarkupCompile.cache
+C:\Users\angry\source\repos\NoteConverter\NoteConverter\obj\Release\NoteConverter_MarkupCompile.lref
+C:\Users\angry\source\repos\NoteConverter\NoteConverter\obj\Release\MainWindow.baml
+C:\Users\angry\source\repos\NoteConverter\NoteConverter\obj\Release\NoteConverter.g.resources
+C:\Users\angry\source\repos\NoteConverter\NoteConverter\obj\Release\NoteConverter.Properties.Resources.resources
+C:\Users\angry\source\repos\NoteConverter\NoteConverter\obj\Release\NoteConverter.csproj.GenerateResource.cache
+C:\Users\angry\source\repos\NoteConverter\NoteConverter\obj\Release\NoteConverter.csproj.CoreCompileInputs.cache
+C:\Users\angry\source\repos\NoteConverter\NoteConverter\obj\Release\NoteConverter.exe
+C:\Users\angry\source\repos\NoteConverter\NoteConverter\obj\Release\NoteConverter.pdb
