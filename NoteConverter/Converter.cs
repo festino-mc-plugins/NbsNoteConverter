@@ -12,184 +12,188 @@ namespace NoteConverter
         private static readonly string PAGE_SEP = "\n   ";
         private static readonly string BOOK_SEP = "\n\n";
 
-        /*
-path = input()
-path_out = path[:path.index(".nbs")] + ".txt"
-        */
 
-        public static List<List<string>> Convert(string NbsFilePath)
+        public static List<List<string>> Convert(string NbsFilePath) // TODO split into several functions
         {
             if (!NbsFilePath.EndsWith(".nbs"))
                 throw new Exception("Файл должен иметь расширение \".nbs\"");
-            string pathOut = NbsFilePath.Substring(0, NbsFilePath.Length - ".nbs".Length) + ".txt";
 
             List<List<string>> books = new List<List<string>>();
             FileStream inStream = new FileStream(NbsFilePath, FileMode.Open);
-            FileStream outStream = new FileStream(pathOut, FileMode.Create);
             using (BinaryReader reader = new BinaryReader(inStream))
             {
-                using (StreamWriter output = new StreamWriter(outStream))
+                byte[] isOld = reader.ReadBytes(2);
+                if (BitConverter.ToUInt16(isOld, 0) != 0)
+                    throw new Exception("Устаревший формат [Old format]");
+                byte[] version = reader.ReadBytes(1);
+                byte[] vanillaInstCount = reader.ReadBytes(1);
+                byte[] songLength = reader.ReadBytes(2);
+                byte[] layersCount = reader.ReadBytes(2);
+
+                int nameLen = reader.ReadInt32();
+                byte[] name = reader.ReadBytes(nameLen);
+                int authorLen = reader.ReadInt32();
+                byte[] author = reader.ReadBytes(authorLen);
+                int origAuthorLen = reader.ReadInt32();
+                byte[] origAuthor = reader.ReadBytes(origAuthorLen);
+                int descriptionLen = reader.ReadInt32();
+                byte[] description = reader.ReadBytes(descriptionLen);
+
+                int TICKRATE = reader.ReadInt16();
+                if (TICKRATE <= 0 || TICKRATE % 100 != 0 || 2000 % TICKRATE != 0)
+                    throw new Exception("Неподходящий тикрейт, 20 должно нацело делиться на " + (TICKRATE / 100.0));
+                reader.ReadBytes(1 * 3 + 4 * 5); // auto-saving x2, time signature, work data
+                int midiSchematicNameLen = reader.ReadInt32();
+                reader.ReadBytes(midiSchematicNameLen);
+                reader.ReadBytes(1 * 2 + 2 * 1); // loop data
+
+                // end of part 1
+
+                string setting_nbs = "nbs " + (TICKRATE / 100) + ',';
+                //output.Write("имя=" + Encoding.UTF8.GetString(name) + ',');
+                List<Layer> LAYERS = new List<Layer>();
+                int tick = -1;
+                int ticks = reader.ReadInt16();
+                while (ticks > 0)
                 {
-                    byte[] isOld = reader.ReadBytes(2);
-                    if (BitConverter.ToUInt16(isOld, 0) != 0)
-                        throw new Exception("Устаревший формат [Old format]");
-                    byte[] version = reader.ReadBytes(1);
-                    byte[] vanillaInstCount = reader.ReadBytes(1);
-                    byte[] songLength = reader.ReadBytes(2);
-                    byte[] layersCount = reader.ReadBytes(2);
-
-                    int nameLen = reader.ReadInt32();
-                    byte[] name = reader.ReadBytes(nameLen);
-                    int authorLen = reader.ReadInt32();
-                    byte[] author = reader.ReadBytes(authorLen);
-                    int origAuthorLen = reader.ReadInt32();
-                    byte[] origAuthor = reader.ReadBytes(origAuthorLen);
-                    int descriptionLen = reader.ReadInt32();
-                    byte[] description = reader.ReadBytes(descriptionLen);
-
-                    int TICKRATE = reader.ReadInt16();
-                    if (TICKRATE <= 0 || TICKRATE % 100 != 0 || 2000 % TICKRATE != 0)
-                        throw new Exception("Неподходящий тикрейт, 20 должно нацело делиться на " + (TICKRATE / 100.0));
-                    reader.ReadBytes(1 * 3 + 4 * 5); // auto-saving x2, time signature, work data
-                    int midiSchematicNameLen = reader.ReadInt32();
-                    reader.ReadBytes(midiSchematicNameLen);
-                    reader.ReadBytes(1 * 2 + 2 * 1); // loop data
-
-                    // end of part 1
-
-                    string setting_nbs = "nbs " + (TICKRATE / 100) + ',';
-                    //output.Write("имя=" + Encoding.UTF8.GetString(name) + ',');
-                    List<Layer> LAYERS = new List<Layer>();
-                    int tick = -1;
-                    int ticks = reader.ReadInt16();
-                    while (ticks > 0)
+                    tick += ticks;
+                    int layer = -1;
+                    int layers = reader.ReadInt16();
+                    while (layers > 0)
                     {
-                        tick += ticks;
-                        int layer = -1;
-                        int layers = reader.ReadInt16();
-                        while (layers > 0)
-                        {
-                            layer += layers;
-                            while (LAYERS.Count <= layer)
-                                LAYERS.Add(new Layer(LAYERS.Count + 1));
+                        layer += layers;
+                        while (LAYERS.Count <= layer)
+                            LAYERS.Add(new Layer(LAYERS.Count + 1));
 
-                            int inst = reader.ReadByte();
-                            int pitch = reader.ReadByte();
-                            reader.ReadBytes(1 * 2); // volume, panning
-                            int finepitch = reader.ReadInt16();
-                            LAYERS[layer].Add(tick, inst + 1, pitch);
-                            layers = reader.ReadInt16();
-                        }
-                        ticks = reader.ReadInt16();
+                        int inst = reader.ReadByte();
+                        int pitch = reader.ReadByte();
+                        reader.ReadBytes(1 * 2); // volume, panning
+                        int finepitch = reader.ReadInt16();
+                        LAYERS[layer].Add(tick, inst + 1, pitch);
+                        layers = reader.ReadInt16();
                     }
-                    foreach (Layer layer in LAYERS)
-                        layer.CalcAvgPitch();
-                    LAYERS.Sort(Comparer<Layer>.Create(
-                            (k1, k2) => k2.GetAvgPitch().CompareTo(k1.GetAvgPitch())
-                    ));
+                    ticks = reader.ReadInt16();
+                }
+                foreach (Layer layer in LAYERS)
+                    layer.CalcAvgPitch();
+                LAYERS.Sort(Comparer<Layer>.Create(
+                        (k1, k2) => k2.GetAvgPitch().CompareTo(k1.GetAvgPitch())
+                ));
 
-                    int i = 0;
-                    int bookIndex = -1;
+                int i = 0;
+                int bookIndex = -1;
+                while (i < LAYERS.Count)
+                {
+                    List<Layer> TO_BOOK = new List<Layer>();
+                    int sumLen = 0;
                     while (i < LAYERS.Count)
                     {
-                        List<Layer> TO_BOOK = new List<Layer>();
-                        int sumLen = 0;
-                        while (i < LAYERS.Count)
+                        if (LAYERS[i].Notes.Count == 0)
+                            continue;
+                        int newLen = LAYERS[i].StrLen + LAYERS[i].Notes[LAYERS[i].Notes.Count - 1].Tick - LAYERS[i].Notes.Count;
+                        if (sumLen + newLen > Page.MAX_PAGE_LEN * 99)
                         {
-                            if (LAYERS[i].Notes.Count == 0)
-                                continue;
-                            int newLen = LAYERS[i].StrLen + LAYERS[i].Notes[LAYERS[i].Notes.Count - 1].Tick - LAYERS[i].Notes.Count;
-                            if (sumLen + newLen > Page.MAX_PAGE_LEN * 99)
-                            {
-                                if (TO_BOOK.Count == 0)
-                                    throw new Exception("Слишком длинный слой #" + LAYERS[i].Num + "(много нот, а не тиков)");
-                                break;
-                            }
-                            TO_BOOK.Add(LAYERS[i]);
-                            sumLen += newLen;
-                            i++;
+                            if (TO_BOOK.Count == 0)
+                                throw new Exception("Слишком длинный слой #" + LAYERS[i].Num + "(много нот, а не тиков)");
+                            break;
                         }
-                        bookIndex++;
-                        books.Add(new List<string>());
-                        int defaultInst = TO_BOOK[0].DefaultInst; // TODO choose most frequently used
-                        string settings = setting_nbs + "default=" + defaultInst + ",";
-                        int maxTick = 0;
-                        foreach (Layer layer in LAYERS)
-                        {
-                            int lastTick = layer.Notes[layer.Notes.Count - 1].Tick;
-                            if (lastTick > maxTick)
-                                maxTick = lastTick;
-                        }
-                        tick = 0;
-                        List<int> indexes = new List<int>();
+                        TO_BOOK.Add(LAYERS[i]);
+                        sumLen += newLen;
+                        i++;
+                    }
+                    bookIndex++;
+                    books.Add(new List<string>());
+                    int defaultInst = TO_BOOK[0].DefaultInst; // TODO choose most frequently used
+                    string settings = setting_nbs + "default=" + defaultInst + ",";
+                    int maxTick = 0;
+                    foreach (Layer layer in LAYERS)
+                    {
+                        int lastTick = layer.Notes[layer.Notes.Count - 1].Tick;
+                        if (lastTick > maxTick)
+                            maxTick = lastTick;
+                    }
+                    tick = 0;
+                    List<int> indexes = new List<int>();
+                    for (int j = 0; j < TO_BOOK.Count; j++)
+                        indexes.Add(0);
+
+                    Page page = new Page(settings);
+                    while (TO_BOOK.Count > 0)
+                    {
+                        int first = maxTick;
                         for (int j = 0; j < TO_BOOK.Count; j++)
-                            indexes.Add(0);
-
-                        Page page = new Page(settings);
-                        output.Write(settings);
-                        while (TO_BOOK.Count > 0)
                         {
-                            int first = maxTick;
-                            for (int j = 0; j < TO_BOOK.Count; j++)
-                            {
-                                int firstIndex = TO_BOOK[j].Notes[indexes[j]].Tick;
-                                if (firstIndex < first)
-                                    first = firstIndex;
-                            }
-                            int silenceTicks = first - tick;
-                            if (silenceTicks > 1)
-                            {
-                                silenceTicks -= 1;
-                                string dots = new string('.', silenceTicks) + ",";
-                                List<string> res1 = page.Add(dots);
-                                foreach (string p in res1)
-                                {
-                                    books[bookIndex].Add(p);
-                                    output.Write(p);
-                                    output.Write(PAGE_SEP);
-                                }
-                            }
-                            tick = first;
-                            bool isFirst = true;
-                            string tickText = "";
-                            for (int j = TO_BOOK.Count - 1; j >= 0; j--)
-                            {
-                                NoteInfo note = TO_BOOK[j].Notes[indexes[j]];
-                                if (note.Tick == tick)
-                                {
-                                    if (isFirst)
-                                        isFirst = false;
-                                    else
-                                        tickText += "&";
-
-                                    string printed = note.Note;
-                                    if (TO_BOOK[j].DefaultInst != defaultInst && TO_BOOK[j].DefaultInst == note.Inst)
-                                        printed = note.Inst + "-" + printed;
-                                    tickText += printed;
-                                    indexes[j]++;
-                                    if (indexes[j] >= TO_BOOK[j].Notes.Count) {
-                                        TO_BOOK.RemoveAt(j);
-                                        indexes.RemoveAt(j);
-                                    }
-                                }
-                            }
-                            if (TO_BOOK.Count > 0)
-                                tickText += ",";
-                            List<string> res2 = page.Add(tickText);
-                            foreach (string p in res2)
+                            int firstIndex = TO_BOOK[j].Notes[indexes[j]].Tick;
+                            if (firstIndex < first)
+                                first = firstIndex;
+                        }
+                        int silenceTicks = first - tick;
+                        if (silenceTicks > 1)
+                        {
+                            silenceTicks -= 1;
+                            string dots = new string('.', silenceTicks) + ",";
+                            List<string> res1 = page.Add(dots);
+                            foreach (string p in res1)
                             {
                                 books[bookIndex].Add(p);
-                                output.Write(p);
-                                output.Write(PAGE_SEP);
                             }
                         }
-                        books[bookIndex].Add(page.GetText());
-                        output.Write(page.GetText());
-                        output.Write(BOOK_SEP);
+                        tick = first;
+                        bool isFirst = true;
+                        string tickText = "";
+                        for (int j = TO_BOOK.Count - 1; j >= 0; j--)
+                        {
+                            NoteInfo note = TO_BOOK[j].Notes[indexes[j]];
+                            if (note.Tick == tick)
+                            {
+                                if (isFirst)
+                                    isFirst = false;
+                                else
+                                    tickText += "&";
+
+                                string printed = note.Note;
+                                if (TO_BOOK[j].DefaultInst != defaultInst && TO_BOOK[j].DefaultInst == note.Inst)
+                                    printed = note.Inst + "-" + printed;
+                                tickText += printed;
+                                indexes[j]++;
+                                if (indexes[j] >= TO_BOOK[j].Notes.Count)
+                                {
+                                    TO_BOOK.RemoveAt(j);
+                                    indexes.RemoveAt(j);
+                                }
+                            }
+                        }
+                        if (TO_BOOK.Count > 0)
+                            tickText += ",";
+                        List<string> res2 = page.Add(tickText);
+                        foreach (string p in res2)
+                        {
+                            books[bookIndex].Add(p);
+                        }
                     }
+                    books[bookIndex].Add(page.GetText());
                 }
             }
             return books;
+        }
+
+        public static void ToFile(string origNbsFile, List<List<string>> books)
+        {
+            string pathOut = origNbsFile.Substring(0, origNbsFile.Length - ".nbs".Length) + ".txt";
+            FileStream outStream = new FileStream(pathOut, FileMode.Create);
+            using (StreamWriter output = new StreamWriter(outStream))
+            {
+                for (int i = 0; i < books.Count; i++)
+                {
+                    List<string> pages = books[i];
+                    for (int j = 0; j < pages.Count; j++)
+                    {
+                        output.Write(PAGE_SEP);
+                        output.Write(pages[j]);
+                    }
+                    output.Write(BOOK_SEP);
+                }
+            }
         }
 
         /** 0 => A0, 87 => C8 */
